@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+  <head prefix="og: http://ogp.me/ns# nodejsexpressdemo: http://ogp.me/ns/apps/nodejsexpressdemo#">
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+
+    <title>{{ title }} | {{ pkg.name }}</title>
+
+    {% block head %}
+      {# Styles #}
+      <link href="//netdna.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet">
+      <link href="/css/jquery.tagsinput.css" rel="stylesheet">
+      <link href="//netdna.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
+      <link rel="stylesheet" href="/css/app.css">
+    {% endblock %}
+  </head>
+
+  {# HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries #}
+  <!--[if lt IE 9]>
+    <script src='https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js'></script>
+    <script src='https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js'></script>
+  <![endif]-->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+  <script>
+    $(document).ready(function () {
+      $('#bikeDelete').click(function(){
+        var csrf = $("#csrf").val();
+        console.log(csrf);
+        $.ajax({
+          url: "/bikes/users/56372230faf540174aff15ed",
+          type: 'DELETE',
+          data: {"_csrf": csrf},
+
+          success: function(data){
+            console.log(data);
+          },
+        });
+      });
+
+      $('#commentsCreate').click(function(){
+        var csrf = $("#csrf").val();
+        console.log(csrf);
+        $.ajax({
+          url: "/comments/56372230faf540174aff15ed",
+          type: 'POST',
+          data: {"_csrf": csrf},
+
+          success: function(result){
+            console.log("자전거 후기 입력",result);
+          },
+        });
+      });
+
+      $('#bikeEdit').click(function(){
+        var csrf = $("#csrf").val();
+        console.log(csrf);
+        $.ajax({
+          url: "/bikes/users/56372230faf540174aff15ed",
+          type: 'PUT',
+          data: {"_csrf": csrf},
+
+          success: function(result){
+            console.log("자전거 수정",result);
+          },
+        });
+      });
+
+      $('#userEdit').click(function(){
+        var csrf = $("#csrf").val();
+        console.log(csrf);
+        $.ajax({
+          url: "/users/563721f0faf540174aff15ec",
+          type: 'PUT',
+          data: {"_csrf": csrf},
+
+          success: function(result){
+            window.location.href = "/users/563721f0faf540174aff15ec";
+          },
+        });
+      });
+
+      $('#bikeActive').click(function(){
+        var csrf = $("#csrf").val();
+        console.log(csrf);
+        $.ajax({
+          url: "/bikes/active/56372230faf540174aff15ed",
+          type: 'PUT',
+          data: {"_csrf": csrf},
+
+          success: function(result){
+            console.log("자전거 수",result);
+          },
+        });
+      });
+
+    });
+  </script>

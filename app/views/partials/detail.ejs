@@ -1,0 +1,13 @@
+<pre><code>
+        <%=bikes%>
+    </code></pre>
+<form>
+
+    <input type="hidden"  id="bikeId" name="bikeId" value="<%=bikes[0]._id%>">
+    <input type="button" id="bikeDelete" value="자전거 삭제">
+    <input type="button" id="bikeEdit" value="자전거 수정">
+    <input type="button" id="commentsCreate" value="자전거 후기 입력">
+    <input type="button" id="bikeActive" value="자전거 활성화/비활성화">
+</form>
+<li><a href="/comments/<%=bikes[0]._id%>">자전거 후기 보기</a></li>
+

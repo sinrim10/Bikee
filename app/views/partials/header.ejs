@@ -1,0 +1,27 @@
+<nav class="navbar navbar-default" role="navigation">
+	<div class="container-fluid">
+
+		<div class="navbar-header">
+			<a class="navbar-brand" href="/">BIKEE</a>
+		</div>
+
+		<ul class="nav navbar-nav">
+			<% if (req.isAuthenticated()) { %>
+			<li class="<% if (isActive("/users/"+req.user.id )) {%>active<%}%>">
+				<a href="/users/<%=req.user.id%>" title="Profile">Profile</a>
+			</li>
+			<li>
+				<a href="/test" title="Test">Test</a>
+			</li>
+			<li>
+				<a href="/logout" title="logout">Logout</a>
+			</li>
+			<% } else { %>
+			<li class="<% if (isActive('/login')) {%>active<%}%>">
+				<a href="/login" title="Login">Login</a>
+			</li>
+			<% }%>
+		</ul>
+
+	</div>
+</nav>

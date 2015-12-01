@@ -1,0 +1,16 @@
+<%if(user.facebook){%>
+    <img src="<%=user.facebook.picture.data.url%>" height="200" width="200">
+<%}%>
+<pre><code>
+        <%=user%>
+    </code></pre>
+<form action="/bikes/users" method="post">
+    <input type="hidden"  id="userId" name="userId" value="<%=user._id%>">
+
+    <input type="button" id="userEdit" value="사용자정보 수정">
+    <input type="submit" value="자전거 추가">
+</form>
+<ul>
+    <li><a href="/bikes/users">보유 자전거 조회</a></li>
+    <li><a href="/comments">내평가 보기</a></li>
+</ul>
