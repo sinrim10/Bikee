@@ -8,21 +8,25 @@ var NR = require("node-resque");
 // we'll use https://github.com/tejasmanohar/node-schedule for this example, 
 // but there are many other excelent node scheduling projects
 var schedule = require('node-schedule');
+var config = require('./config/config');
 var mongoose = require('mongoose');
-mongoose.connect('mongodb://54.64.210.161:3000/bikee')
-var Bike = require('./app/models//bikes');
-var Reserves = require('./app/models/reserves');
-var logger = require('./config/logger');        // Winston Logger
-var send = require('./app/controllers/gcm');
-var async = require("async");
+var connect = function () {
+  var options = { server: { socketOptions: { keepAlive: 1, connectTimeoutMS: 30000 } } };
+  mongoose.connect(config.db, options);
+};
+connect();
+/*var Bike = require('./app/models//bikes');
+var Reserves = require('./app/models/reserves');*/
+//var logger = require('./config/logger');        // Winston Logger
+var gcm = require('./app/controllers/gcm');
 var time = new Date();
 ///////////////////////////
 // SET UP THE CONNECTION //
 ///////////////////////////
-logger.info(time);
+//logger.info(time);
 var connectionDetails = {
   package:   'ioredis',
-  host:      'bikee.kr.pe',
+  host: '',
   password:  null,
   port:      6379,
   database:  0,
@@ -37,17 +41,26 @@ var connectionDetails = {
 
 var jobs = {
   sendMassage: function(results, callback){
-    console.log('results :' ,results.result)
+    console.log(JSON.stringify(results,undefined,4));
     if(results.result.length>0){
-      for(var i in results.result){
-        schedule.scheduleJob(new Date(results.result[i].rentEnd) ,
-            function(){
-              console.log('*** THE TIME IS ' + new Date() + ' ***');
-              console.log('*** THE RentEnd IS ' + new Date(results.result[i].rentEnd) + ' ***');
-              send.sendMessage1(results.result[i].renter, results.result[i].bike.title+"의 예약이 30분 남았습니다.");
-            })
+        results.result.forEach(function(item){
+          item.gcm.forEach(function(result){
+            for(var i in result.gcm){
+              schedule.scheduleJob(new Date(result.gcm[i].rentEnd), function(){
+                console.log('*** THE TIME IS ' + new Date() + ' ***');
+                console.log('*** THE RentEnd IS ' + new Date(result.gcm[i].rentEnd) + ' ***');
+                //gcm.sendMessage1(result._id.token[0],result._id.renter.name+"님의 ["+ results.gcm[i].bike.title+"] 예약이 30분 남았습니다.");
+                gcm.rentEndGcmSend(result._id.token[0],result._id.renter.name+"님의 ["+ results.gcm[i].bike.title+"] 예약이 30분 남았습니다.",function(err,result){
+                    if(err){
+                      console.error(JSON.stringify(result,undefined,4))
+                    }
+                  console.log(JSON.stringify(result,undefined,4))
+                });
+              })
+            }
+          })
+        })
       }
-    }
     callback(null, true);
   }
 };
@@ -89,7 +102,7 @@ worker.on('pause',           function(){ console.log("worker paused"); });
 scheduler.on('start',             function(){ console.log("scheduler started"); });
 scheduler.on('end',               function(){ console.log("scheduler ended"); });
 scheduler.on('poll',              function(){ console.log("scheduler polling"); });
-scheduler.on('master',            function(state){ console.log("scheduler became master"); });
+scheduler.on('master',            function(state){ console.log("scheduler became master: ", state); });
 scheduler.on('error',             function(error){ console.log("scheduler error >> " + error); });
 scheduler.on('working_timestamp', function(timestamp){ console.log("scheduler working timestamp " + timestamp); });
 scheduler.on('transferred_job',   function(timestamp, job){ console.log("scheduler enquing job " + timestamp + " >> " + JSON.stringify(job)); });
@@ -101,7 +114,7 @@ scheduler.on('transferred_job',   function(timestamp, job){ console.log("schedul
 
 var queue = new NR.queue({connection: connectionDetails}, jobs);
 var rule = new schedule.RecurrenceRule();
-var range = 1;
+var range = 2;
 rule.minute = new schedule.Range(0, 59, range);
 queue.on('error', function(error){ console.log(error); });
 queue.connect(function(){
@@ -109,71 +122,14 @@ queue.connect(function(){
   schedule.scheduleJob(rule, function() { // do this job every 10 seconds, cron style
     // we want to ensure that only one instance of this job is scheduled in our enviornment at once,
     // no matter how many schedulers we have running
-
-    var time = new Date()
-        ,month = time.getMonth()
-        ,hour = time.getHours()
-        ,min = time.getMinutes()
-        ,year = time.getFullYear()
-        ,days = time.getDate();
-
-    var start = new Date(year,month,days,hour,min+30);
-    var end = new Date(year,month,days,hour,min+range);
-
-    console.log('start ', start);
-    console.log('end ', end);
-    async.waterfall([
-          function (callback) {
-            Reserves.aggregate(
-                [
-                  {
-                    "$match": {
-                      'reserve.rentEnd': start/*{
-                        $gt: start,
-                        $lte: end
-                      }*/
-                    }
-                  },
-                  {"$unwind": "$reserve"},
-                  {
-                    "$match": {
-                      'reserve.rentEnd': start /*{
-                        $gt: start,
-                        $lte: end
-                      }*/
-                    }
-                  },
-                  {
-                    "$group": {
-                      "_id": "$_id",
-                      "bike": {"$first": "$bike"},
-                      "rentEnd": {"$first": "$reserve.rentEnd"},
-                      /*"reserveid": {$push:"$reserve._id"},*/
-                      "renter": {$push: '$reserve.renter'} /*{ "$first": "$reserve.renter" }*/
-                    }
-                  }
-                ],
-                function (err, result) {
-                  /*console.log('data ' ,result);*/
-                  Bike.populate(result, {"path": "bike", select: 'title'}, function (err, results) {
-                    if (err) throw err;
-                    console.log(JSON.stringify(results, undefined, 4));
-                    callback(null, results);
-                  });
-                }
-            )
-          }
-        ],
-        function (err, results) {
-          if (scheduler.master) {
-            console.log(">>> enquing a job  " , results);
-            queue.enqueue('gcm', "sendMassage", {result: results});
-          }
-        });
-  });
+    gcm.rentEndGcm(function(err,results){
+      if (scheduler.master) {
+          console.log(">>> enquing a job  " , results);
+          queue.enqueue('gcm', "sendMassage", {result: results});
+      }
+    })
+   });
 });
-
-
 
 //////////////////////
 // SHUTDOWN HELPERS //

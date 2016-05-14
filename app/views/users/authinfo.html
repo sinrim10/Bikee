@@ -1,8 +1,0 @@
-{% extends '../layouts/default.html' %}
-
-{% block main %}
-<li class="{% if (isActive('/users/' + req.user.id )) %}active{% endif %}">
-    <h1>인증 패이지</h1>
-    <h1>{{ title || '추가인증페이지' }}</h1>
-</li>
-{% endblock %}

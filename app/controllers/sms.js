@@ -15,14 +15,11 @@ exports.authsms = function(req,res){
     option.mobile = mobile;
 
     SmsSchema.create({mobile:mobile,auth_number:result},function(err,data){
-        console.log('data ' ,data);
         if(err){
             return res.json({code:500,success:true,result:[],msg:"인증 번호 생성 오류",err:err});
         }
-        console.log("option " , option);
         /*return res.json({code: 200, success: true, result: [{id: data._id}], msg: "인증 번호 생성", err: err});*/
         sms.send(option).then(function (result) {
-            console.log(result);
             return res.json({code: 200, success: true, result: [{id: data._id}], msg: "인증 번호 생성", err: err});
         });
     })
@@ -39,7 +36,6 @@ exports.authcheck = function(req,res){
         if(!result){
             return res.json({code:403,success:false,result:[],msg:"인증 오류",err:err});
         }
-        console.log('result ' , result);
         if(result.auth_number == auth_number){
             result.update({$set:{accepted : true}},function(err,result){
                 if(err){

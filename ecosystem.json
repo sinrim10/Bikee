@@ -1,0 +1,18 @@
+{
+  "apps" :{
+    "name" : "bikee",
+    "script"    : "server.js",
+    "watch"             : true,
+    "exec_mode"         : "cluster",
+    "instances"         : "max",
+    "max_restarts"      : 40,
+    "max_memory_restart": "300M",
+    "restart_delay"     : 1000,
+    "env": {
+      "COMMON_VARIABLE": "true"
+    },
+    "env_production" : {
+      "NODE_ENV": "production"
+    }
+  }
+}

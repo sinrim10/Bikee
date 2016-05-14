@@ -14,4 +14,4 @@ var InquiresSchema = new Schema({
 });
 
 
-mongoose.model('Inquires', InquiresSchema);
+module.exports = mongoose.model('Inquires', InquiresSchema);

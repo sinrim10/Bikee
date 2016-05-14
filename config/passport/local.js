@@ -20,14 +20,11 @@ module.exports = new LocalStrategy({
       criteria: { email: email },
       select: 'name email hashed_password salt'
     };
-    console.log('호출');
-    User.load(options, function (err, user) {
-
+      User.load(options, function (err, user) {
       if (err) return done(err)
       if (!user) {
         return done(null, false, { message: 'Email을 잘못 입력 하셨습니다.' });
       }
-      console.log("password ", password);
       if (!user.authenticate(password)) {
         return done(null, false, { message: 'Password를 잘못 입력 하셨습니다.' });
       }

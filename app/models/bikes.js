@@ -3,9 +3,8 @@
  */
 var mongoose = require('mongoose');
 var Schema = mongoose.Schema;
-var Imager = require('imager');
-var imagerConfig = require("../../config/imager");
-
+/*var awsUpload = require('../controllers/aws');*/
+var User = require('./users');
 var BikesSchema = new Schema({
     user:{type:Schema.ObjectId, ref :'Users'},//자전거주인
     type: {type:String, required: true},//종류
@@ -28,7 +27,7 @@ var BikesSchema = new Schema({
         month:{type:Number,default:0}
     },
    // lockdeviceId:{type:String,default:''},
-    active:{type:Boolean, default:false },//삭제 여부
+    active:{type:Boolean, default:true },//삭제 여부
     createdAt  : {type : Date, default : Date.now},//최초작성일
     updatedAt  : {type : Date, default : Date.now}//최종수정일
 });
@@ -76,24 +75,11 @@ list: function (options, cb) {
         var criteria = options.criteria || {};
         var select = options.select || "";
         var populate = options.populate || "";
-        var populateSel = options.populateSel || "";
-        var loc = options.loc || {};
-        var ninid = options.ninid || [];
-        var limit = options.limit||{};
-        var ninbike = options.userid || [] ;
-        var skip = options.skip || 0 ;
-        console.log('ninid ', ninid);
-        console.log('options ' , options);
+        var popselect = options.popselect || "";
         this.find(criteria)
-            .nin("_id",ninid)
-            .nin("user",ninbike)
-            .where(loc)
-            /*.where(date)*/
             //.where('active').equals(false)//활성화 비활성화 여부.
-            .limit(limit)
-            .skip(skip)
             .select(select)
-            .populate(populate,populateSel)
+            .populate(populate,popselect)
             /*.sort({'_id': -1}) // sort by date*/
             .exec(cb);
     }
@@ -102,21 +88,30 @@ BikesSchema.methods = {
     uploadAndSave: function (images, cb) {
         if (!images || !images.length) return this.save(cb)
 
-        var imager = new Imager(imagerConfig, 'S3');
+
         var self = this;
+
         this.validate(function (err) {
             if (err) return cb(err);
-                imager.upload(images, function (err, cdnUri, files) {
-                    console.log('cdnUril ',cdnUri);
-                    console.log('files ', files);
-                    if (err) return cb(err);
-                    console.log(files.length)
-                    if (files.length) {
-                        self.image = { cdnUri : cdnUri, files : files };
-                    }
-                    console.log(' self ' , self)
-                    self.save(cb);
-                }, 'article');
+            /*awsUpload.imageUpload(images,function(err,files,cdnUri){
+                if (err) return cb(err);
+                if (files.length) {
+                    self.image = { cdnUri : cdnUri, files : files };
+                }
+                self.save(cb);
+            })*/
+
+      /*      image.upload(images, function (err, cdnUri, files) {
+                console.log('cdnUril ',cdnUri);
+                console.log('files ', files);
+                if (err) return cb(err);
+                console.log(files.length)
+                if (files.length) {
+                    self.image = { cdnUri : cdnUri, files : files };
+                }
+                console.log(' self ' , self)
+                self.save(cb);
+            }, 'article');*/
         });
     }
 }

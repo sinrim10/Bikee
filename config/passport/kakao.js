@@ -16,8 +16,6 @@ module.exports = new KakaoStrategy({
       callbackURL: ""
     }, function(accessToken, refreshToken, profile, done){
 
-      console.log('kakao1234 ' , profile);
-      console.log('accessToken ' , accessToken);
       var options = {
         criteria: { 'kakao.id': profile.id }
       };

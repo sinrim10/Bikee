@@ -8,7 +8,7 @@ var logger = new winston.Logger({
     transports:[
         new winston.transports.Console({
             level:'info',
-            colorize:false
+            colorize:true
         }),
         new winston.transports.DailyRotateFile({
             level:'debug',

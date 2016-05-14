@@ -6,7 +6,7 @@ var Reserve = mongoose.model('Reserves');
  */
 
 exports.requiresLogin = function (req, res, next) {
-  console.log('passport ' , req.session);
+  console.log('req.user ',req.user);
   if (req.isAuthenticated()) {
     console.log('로그인 권한 획득')
     return next()
@@ -42,19 +42,19 @@ exports.reserve = {
     Reserve.findOne({bike:bikeId })
         .select("lister")
         .exec(function(err,lister){
-          console.log('lister ' , lister);
           if(err) {
             console.error(err);
-            res.json({code:500 , success:false,result:[],msg:"예약 정보 조회에 실패 하였습니다.",err:err});
+            return res.json({code:500 , success:false,result:[],msg:"예약 정보 조회에 실패 하였습니다.",err:err});
           }
           if(lister){
             if(req.user.id == lister.lister){
               next();
             } else {
-              res.json({code:401,success:false,result:[],msg:"변경 할 수 있는 권한이 없습니다", err : err});
+              console.log('변경 권한 없음.')
+              return res.json({code:401,success:false,result:[],msg:"변경 할 수 있는 권한이 없습니다", err : err});
             }
           } else{
-            res.json({code:500 , success:false,result:[],msg:"예약 정보가 없습니다.",err:err});
+            return res.json({code:500 , success:false,result:[],msg:"예약 정보가 없습니다.",err:err});
           }
 
         })
@@ -65,19 +65,18 @@ exports.reserve = {
     Bike.findOne({_id:bikeId })
         .select("user")
         .exec(function(err,bike){
-          console.log('lister ' , bike);
           if(err) {
-            console.error(err);
-            res.json({code:500 , success:false,result:[],msg:"자전거 정보 조회에 실패 하였습니다.",err:err});
+            console.error("has1 error",err);
+            return res.json({code:500 , success:false,result:[],msg:"자전거 정보 조회에 실패 하였습니다.",err:err});
           }
           if(bike){
             if(req.user.id == bike.user){
-              res.json({code:401,success:false,result:[],msg:"본인 자전거에 예약요청을 할 수 없습니다.", err : err});
+              return res.json({code:401,success:false,result:[],msg:"본인 자전거에 예약요청을 할 수 없습니다.", err : err});
             } else {
               next();
             }
           } else{
-            res.json({code:500 , success:false,result:[],msg:"자전거 정보가 없습니다.",err:err});
+            return res.json({code:500 , success:false,result:[],msg:"자전거 정보가 없습니다.",err:err});
           }
 
         })
@@ -103,7 +102,7 @@ exports.bike = {
           return res.json({code: "500",success:false,result:[], msg: "본인 자전거가 아닙니다.",err:err});
         } else {
           console.log('본인 자전거 인증 완료');
-          next();
+          return next();
         }
       }else{
         return res.json({code: "500",success:false,result:[], msg: "자전거 정보가 없습니다..",err:err});
@@ -122,16 +121,14 @@ exports.comment = {
     var bikeId = req.params.bikeId;
     Bike.findOne({_id:bikeId},function(err,data){
       if(err) next(err);
-      console.log('자전거 주인' , data.lister);
       if (req.user.id != data.user) {
-        console.log('후기 작성 권한 획득..');
+        req.body.lister = data.user;
         next()
       } else {
         console.log('권한 획득 안됨..');
         req.flash('info', 'You are not authorized')
-        res.json({code:405,success:false ,result:[], msg :"본인자전거에 후기를 작성 할 수 없습니다.",err:err})
+        return res.json({code:405,success:false ,result:[], msg :"본인자전거에 후기를 작성 할 수 없습니다.",err:err})
       }
     })
-
   }
 }

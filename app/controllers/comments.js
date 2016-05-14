@@ -3,13 +3,16 @@
  */
 var mongoose = require('mongoose');
 var Bike = mongoose.model('Bikes');
+var User = mongoose.model('Users');
+var Users = require('../models/users')
 var Comments = mongoose.model('Comments');
-
+var ObjectId = mongoose.Types.ObjectId;
 /**
  * 내평가 보기
  * */
 exports.show = function(req,res,next) {
     var writer = req.user.id;
+
     /*var comments = Comments.find({lister: lister });
     comments.populate("comments.writer","name email image _id")
     comments.populate("bike", "title _id")
@@ -20,19 +23,30 @@ exports.show = function(req,res,next) {
         }
         res.json({code:200 , success:true,result : comment,err:err});
     })*/
+    Comments.aggregate([ {
+        $match:
+        {"comments.writer":new ObjectId(writer)}
+    },
+        { "$unwind": "$comments" },
+        {
+            $match:
+            {"comments.writer":new ObjectId(writer)}
+        },
+        { "$group": {
+            "_id" :"$_id",
+            "bike": {$first:'$bike'},
+            "lister" :{$first:'$lister'},
+            "comments":{$push:"$comments"}
 
-    Comments.find({"reserve.writer": mongoose.Schema.ObjectId(writer) })
-        .populate("bike","title image")
-        .populate("lister","name email image")
-        .populate("comments.writer","name email image _id")
-        .exec(function(err,comment){
-            if(err) {
-                console.error(err);
-                res.json({code:500 , success:false,result:comment,err:err});
-            }
-            console.log('comment ' , comment);
-            res.json({code:200 , success:true,result : comment,err:err});
+        }}],function(err,result){
+
+        Bike.populate( result, { "path": "bike",select:"title image" }, function(err,results) {
+            if (err) throw err;
+            User.populate(results,{"path":"lister",select:"email image name"},function(err,users){
+                res.json({code:200 , success:true,result : users,err:err});
+            })
         })
+    });
 }
 
 /**
@@ -61,47 +75,27 @@ exports.myshow = function(req,res,next) {
 exports.create = function(req,res,next){
     var user = req.user.id;
     var bikeId = req.params.bikeId ? req.params.bikeId : undefined;
-    var data = req.body ? req.body : undefined;
+    var comment = req.body ? req.body : undefined;
     if(typeof data == "string"){
-        data = JSON.parse(data);
+        comment = JSON.parse(comment);
     }
-    console.log('result type1', typeof data);
-    Comments.findOne({bike:bikeId},function(err,comments){
-        if(err) {
-            console.error(err);
-            res.json({code:500 , success:false,result:[],msg:"후기 작성 실패",err:err});
-        }
-        if(!comments){
-            console.log("자전거정보 없음 새로 생성");
-            Bike.findById(bikeId,function(err,bike){
-                if(err) {
+    if(comment){
+        comment.writer = user;
+        Comments.findOneAndUpdate(
+            {"$and":[{"bike":new ObjectId(bikeId)},{"lister":comment.lister}]},
+            { $push: {"comments": comment}},
+            {  safe: true, upsert: true},
+            function(err, model) {
+                if(err){
                     console.error(err);
-                    res.json({code:500 , success:false,result:[],msg:"자전거 조회 실패",err:err});
+                    return res.json({code:500 , success:false,result:[],msg:"자전거 후기 작성 실패",err:err});
                 }
-                data.writer = user;
-                var comment = { bike: bike._id,
-                                lister: bike.user,
-                    comments : data }
-                /*comment.comments.writer = user;*/
-                console.log('comment ' , comment);
-                Comments.create(comment,function(err,result){
-                    console.log('처음 생성 ' , result);
-                    res.json({code:200,success:true,result:[],msg:"자전거 후기 정보 초기 생성",err:err});
-                })
-            })
-        }else{
-            var comment = data;
-            comment.writer = user;
-            comments.update({$push:{comments:comment}},{ safe: true, upsert: true},function(err,comments){
-                if(err) {
-                    console.error(err);
-                    res.json({code:500 , success:false,result:[],msg:"자전거 후기 작성 실패",err:err});
-                }
-                console.log("comment 추가",comments);
-                res.json({code:200,success:true,result:[],msg:"자전거 후기 추가",err:err});
+
+                return res.json({code:200,success:true,result:[],msg:"자전거 후기 추가",err:err});
             });
-        }
-    })
+    }else{
+        return res.json({code:200,success:false,result:[],msg:"자전거 후기 내용이 없습니다.",err:null});
+    }
 
 }
 /**
@@ -111,7 +105,6 @@ exports.create = function(req,res,next){
  * */
 exports.bike = function(req,res,next){
     var bikeId = req.params.bikeId;
-    /*console.log(' 현재 로그인중인 유저 정보 %s  %s',req.user.name , req.user.email);*/
     Comments.findOne({bike : bikeId}).exec(function(err,comments){
         var writer={path:'comments.writer',select:'name email facebook'};
         var bike={path:'bike',select:'image user title'};

@@ -5,7 +5,7 @@
 module.exports = {
   db : "",
   sms: {
-    url: 'http://sslsms.cafe24.com/sms_sender.php',
+    url: '',
     userId: '',
     secure: '',
     source: {
@@ -13,5 +13,27 @@ module.exports = {
       phone2: '',
       phone3: ''
     }
+  },
+  iamport:{
+    imp_uid : "",
+    imp_key : "",
+    imp_secret :""
+  },
+  pass:{
+    start : 0,
+    end : 0,
+    enc :0
+  },
+  gcm:{
+    sender:""
+  },
+  facebook:{
+    clientID:"",
+    clientSecret:""
+  },
+  nodemailer:{
+    service:"",
+    id:"",
+    pass:""
   }
 };

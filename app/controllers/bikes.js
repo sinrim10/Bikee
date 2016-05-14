@@ -5,6 +5,7 @@ var mongoose = require('mongoose');
 var Bike = mongoose.model('Bikes');
 var Comment = mongoose.model('Comments');
 var Reserves = mongoose.model('Reserves');
+var User = mongoose.model("Users");
 var ObjectId = mongoose.Types.ObjectId;
 /**
  *
@@ -12,18 +13,17 @@ var ObjectId = mongoose.Types.ObjectId;
  *
  * */
 exports.create = function(req, res){
-    var rst = req.body.bike ? req.body.bike : undefined;
-   /* var images = req.files.image
-        ? [req.files.image]
-        : undefined; //  이미지 정보*/
-    var bike = JSON.parse(rst);
+    var bike = req.body.bike ? req.body.bike : undefined;
+    var files = req.files;
+    var image = [];
+    if(typeof bike === "string"){
+        bike = JSON.parse(bike);
+    }
+
     var coordinates = bike.loc.coordinates ? bike.loc.coordinates : undefined;
     var longitude = "";
     var latitude =  "";
-    var images = [];
-    for(var i=0;i<parseInt(req.body.size);i++){
-        images.push(req.files["image"+i]);
-    }
+
     if(coordinates) {
         if(coordinates.length >0 ){
             longitude = coordinates[0];
@@ -33,197 +33,388 @@ exports.create = function(req, res){
         longitude = "126.978013";
          latitude =  "37.565596";
     }
-    console.log('result type1', typeof bike);
-    console.log("req.files.image ", images);
-    console.log('coordinates ' , coordinates);
-    console.log('latitude ' , latitude);
-    console.log('longitude' , longitude);
+
      var bikes = new Bike(bike);
      bikes.user = req.user;
      bikes.loc = { type: 'Point', coordinates: [parseFloat(longitude), parseFloat(latitude)] };
-     bikes.uploadAndSave(images, function (err,result) {
+    files.forEach(function(file){
+        image.push("/"+file.key);
+    })
+    bikes.image = { cdnUri : 'https://sharebike.s3.amazonaws.com', files : image };
+    bikes.save(function(err,result){
+        if(err) {
+            console.log('err ', err);
+            return res.json({code:500, success:true,result:[] ,msg:"보유 자전거 등록에 실패했습니다.",err : err});
+        }
+            res.json({code:"200",success:true,result:[],msg :'자전거 등록되었습니다'});
+    })
+     /*bikes.uploadAndSave(req.files.files, function (err,result) {
      if(err) {
-         console.log('err ' , err);
+         console.log('err ', err);
          return res.json({code:500, success:true,result:[] ,msg:"보유 자전거 등록에 실패했습니다.",err : err});
      }
             res.json({code:"200",success:true,result:[],msg :'자전거 등록되었습니다'});
-        });
+        });*/
      }
 
-exports.all = function (req,res){
 
-    var options = {};
-    var lat,lon;
+exports.list = function (req,res){
+    var lat = req.params.lat ?req.params.lat : "37.565596";
+    var lon = req.params.lon ? req.params.lon : "126.978013";
+    var lastindex = req.params.lastindex ? req.params.lastindex : 0;
+    var obj = Object.getOwnPropertyNames(req.query);
+    var json = {};
 
-    lat = req.params.lat ?req.params.lat : "37.565596";
-    lon = req.params.lon ? req.params.lon : "126.978013";
+    var skip = parseInt(lastindex);
+    var limit = 20;
 
-
-    var point = { type : "Point", coordinates : [parseFloat(lon), parseFloat(lat)] };
-    options.loc = {
-        loc: {
-            $near: {
-                $geometry: point
-              /*  ,$maxDistance:10000 //단위 미터..*/
-                , spherical: true
+    if(obj.length >0){
+        for(var i in obj ){
+            if(typeof req.query[obj[i]] === "string"){
+                json[obj[i]] =JSON.parse(req.query[obj[i]])
             }
         }
     }
-    options.select = "type price height title loc createdAt updatedAt active user image";
-    options.populate = "user"
-    options.populateSel ="name email phone image"
-    options.userid = [];
-    if(req.user){
-        options.userid.push(req.user.id);
-        console.log('req.user ' ,req.user.id);
-    }
-    console.log("options.loc " , options.loc)
-    Bike.list(options, function (err, bikes) {
-        if (err){
-            console.error(err)
-            return res.json({msg:500,result:[],msg:"전체조회 실패 했습니다.",err: err});
-        }
-        console.log('자전거 전체 조회 ' , bikes);
+    if(json.filter){
+        if(json.filter.start && json.filter.end){
+            var start = new Date(Date.parse(json.filter.start));
+            var end = new Date(Date.parse(json.filter.end));
+            Reserves.aggregate([
+                {
+                    $unwind:"$reserve"
+                },
+                {
+                    $match: {
+                        $or: [
+                            {$and:[{'reserve.rentStart':{$lt:start}},{'reserve.rentEnd':{$gt:start}},{'reserve.rentStart':{$lt:end}},{'reserve.rentEnd':{$lt:end}}]},
+                            {$and:[{'reserve.rentStart':{$gt:start}},{'reserve.rentEnd':{$gt:start}},{'reserve.rentStart':{$lt:end}},{'reserve.rentEnd':{$gt:end}}]},//없음
+                            {$and:[{'reserve.rentStart':{$lt:start}},{'reserve.rentEnd':{$gt:start}},{'reserve.rentStart':{$lt:end}},{'reserve.rentEnd':{$gt:end}}]},
+                            {$and:[{'reserve.rentStart':{$gt:start}},{'reserve.rentEnd':{$gt:start}},{'reserve.rentStart':{$lt:end}},{'reserve.rentEnd':{$lt:end}}]}
+                            /*{$and:[{'reserve.rentStart':{$lt:start}},{'reserve.rentEnd':{$gt:start}},{'reserve.rentStart':{$lt:end}},{'reserve.rentEnd':{$lt:end}}]},
+                            {$and:[{'reserve.rentStart':{$gt:start}},{'reserve.rentEnd':{$lt:start}},{'reserve.rentStart':{$lt:end}},{'reserve.rentEnd':{$gt:end}}]},
+                            {$and:[{'reserve.rentStart':{$gt:start}},{'reserve.rentEnd':{$gt:start}},{'reserve.rentStart':{$lt:end}},{'reserve.rentEnd':{$lt:end}}]},
+                            {$and:[{'reserve.rentStart':{$lt:start}},{'reserve.rentEnd':{$gt:start}},{'reserve.rentStart':{$lt:end}},{'reserve.rentEnd':{$gt:end}}]},*/
+                        ]
+                    }
 
-        res.json({
-            code:200,success:true,result:bikes,err:err
-        });
-    });
-}
-     /**
-     *  필터 조회
-     */
-exports.index = function (req, res){
-    /*lat=37.468501&lon=126.957913&start=2015/11/08 20:14:43&end=2015/11/12 20:14:43&type=03&height=A&component=01,02,03,04&smartlock=true*/
-    /*lat=37.468501&lon=126.957913&start=&end=&type=&height=&component=&smartlock=*/
-    var options = {};
-    var lat,lon,start,end,type,height,component,smartlock,comp,lastindex =0;
-    lastindex = req.params.lastindex ? req.params.lastindex : 0;
-    lat = req.params.lat ?req.params.lat : "37.565596";
-    lon = req.params.lon ? req.params.lon : "126.978013";
-    start = req.query.start ?req.query.start : "";
-    end = req.query.end ? req.query.end :"";
-    type = req.query.type ? req.query.type :"";
-    height = req.query.height ? req.query.height :"";
-    component = req.query.component ? req.query.component : "";
-    smartlock = req.query.smartlock ? req.query.smartlock : false;
-
-    if(start !="" && end != ""){
-        start = new Date(Date.parse(start))
-        end = new Date(Date.parse(end))
-    }
-
-
-
-    console.log('start ' , start + " ")
-    console.log('end ' , end+ " ")
-    console.log('type ' , type+ " ")
-    console.log('height ' , height+ " ")
-    console.log('component ' , component+ " ")
-    console.log('smartlock ' , smartlock+ " ")
-
-    if(component != ""){
-        comp = component.split(",");
-        console.log('comp ',comp+ " ");
-    }
-
-
-    console.log('typeof lon ' , typeof lon)
-    console.log('typeof lat ' , typeof lat)
-    var point = { type : "Point", coordinates : [parseFloat(lon),parseFloat(lat) ] };
-    options.loc = {
-        loc: {
-            $near: {
-                $geometry: point
-                //,$maxDistance:84 //단위 미터..
-                , spherical: true
-            }
-        }
-    }
-    options.select = "type price height title loc createdAt updatedAt active user image";
-    options.populate = "user"
-    options.populateSel ="name email phone image"
-    options.skip = parseInt(lastindex);
-    options.limit = 10;
-    options.ninid = [];
-    options.userid = [];
-    if(req.user){
-        options.userid.push(req.user.id);
-        console.log('req.user ' ,req.user.id);
-    }
-    var query = Reserves.find({$or:[{'reserve.rentStart':{$gt : end}} , {'reserve.rentEnd':{$lt : start}}]})
-    query.select("_id");
-    query.exec(function(err,data){
-        console.log('예약가능한 id. ', data);
-        Reserves.find({_id:{$nin:data}}).select("bike")
-            .exec(function(err,data){
-                console.log('예약 불가능한 id..', data);
-                if(start != "" && end != ""){
-                    if(data.length>0){
-                        for(var i=0 ;i < data.length;i++){
-                            console.log('data[i].bike ' , data[i].bike);
-                            options.ninid.push(data[i].bike);
-                        }
+                },
+                {
+                    $group:{
+                        _id:"$bike"
                     }
                 }
+            ]).exec(function(err,result){
 
-                Bike.list(options, function (err, bikes) {
+                if (err){
+                    console.error(err)
+                    return res.json({code:500,result:[],msg:"필터조회 실패 했습니다.",err: err.stack});
+                }
+                var and = [];
+                and.push({_id:{$nin: result.map(function(u){
+                    return new ObjectId(u._id);
+                })}});
+                if(json.filter.type){
+                    and.push({"type":json.filter.type})
+                }
+                if(json.filter.height){
+                    and.push({"height":json.filter.height});
+                }
+                if(!(json.filter.smartlock === 'undefined')){
+                    and.push({"smartlock":json.filter.smartlock});
+                }
+                if(and.length == 0){
+                    and.push({});
+                }
+                Bike.aggregate(
+                    [{
+                        $geoNear:{
+                            near:[parseFloat(lon), parseFloat(lat)],
+                            distanceField:"distance",
+                            /*includeLocs: "dist.location",*/
+                            spherical:true,
+                            distanceMultiplier:6378.139266/*,
+                             maxDistance:parseFloat("1010101010")/6378.139266*/
+                        }
+                    },{
+                        $skip:skip
+                    },{
+                        $limit:limit
+                    },{
+                        $match:{
+                            /*$and:[{_id:{$in: result.map(function(u){
+                             return new ObjectId(u.bike);
+                             })}},{"type":json.filter.type},{"height":json.filter.height}]*/
+                            $and: and
+
+                        }
+                    }])
+                    .exec(function(err,result){
+                        /*console.log( JSON.stringify( result, undefined, 4 ) );*/
+                        if (err){
+                            console.error(err)
+                            return res.json({msg:500,result:[],msg:"필터조회 실패 했습니다.",err: err});
+                        }
+                        User.populate(result,{path:"user",select:"phone provider image email name"},function(err,bikes){
+                            res.json({
+                                code:200,success:true,count:bikes.length,result:bikes,err:err
+                            });
+                        });
+                    })
+
+            })
+        }else{
+            var and = [];
+            if(json.filter.type){
+                and.push({"type":json.filter.type})
+            }
+            if(json.filter.height){
+                and.push({"height":json.filter.height});
+            }
+            if(!(json.filter.smartlock === 'undefined')){
+                and.push({"smartlock":json.filter.smartlock});
+            }
+            if(and.length == 0){
+                and.push({});
+            }
+            Bike.aggregate(
+                [{
+                    $geoNear:{
+                        near:[parseFloat(lon), parseFloat(lat)],
+                        distanceField:"distance",
+                        /*includeLocs: "dist.location",*/
+                        spherical:true,
+                        distanceMultiplier:6378.139266,
+                        maxDistance:parseFloat("1010101010")/6378.139266
+                    }
+                },{
+                    $skip:skip
+                },{
+                    $limit:limit
+                },{
+                    $match:{
+                        /*$and:[{_id:{$in: result.map(function(u){
+                         return new ObjectId(u.bike);
+                         })}},{"type":json.filter.type},{"height":json.filter.height}]*/
+                        $and: and
+
+                    }
+                }])
+                .exec(function(err,result){
                     if (err){
                         console.error(err)
-                        return res.json({msg:500,result:[],msg:"전체조회 실패 했습니다.",err: err});
+                        return res.json({msg:500,result:[],msg:"필터조회 실패 했습니다.",err: err});
                     }
+                    User.populate(result,{path:"user",select:"phone provider image email name"},function(err,bikes){
 
-                    console.log('자전거 전체 조회 ' , bikes);
-                    Bike.count(function(err,count){
-                        console.log('&& count > options.limit ' , count);
-                        if(count < parseInt(lastindex)){
-                            res.json({
-                                code:200,success:true,result:bikes,lastindex:lastindex,err:err
-                            });
-                        }else{
-                            lastindex = parseInt(lastindex) + parseInt(options.limit) ;
-                            console.log('lastIndex' , lastindex);
-                            res.json({
-                                code:200,success:true,result:bikes,lastindex:parseInt(lastindex),err:err
-                            });
-                        }
-                    })
+                        res.json({
+                            code:200,success:true,count:bikes.length,result:bikes,err:err
+                        });
+                    });
+                })
+        }
+    } else {
+        Bike.aggregate(
+            [{
+                $geoNear:{
+                    near:[parseFloat(lon), parseFloat(lat)],
+                    distanceField:"distance",
+                    /*includeLocs: "dist.location",*/
+                    spherical:true,
+                    distanceMultiplier:6378.139266/*,
+                    maxDistance:parseFloat("1010101010")/6378.139266*/
+                }
+            },{
+                $skip:skip
+            },{
+                $limit:limit
+            }])
+            .exec(function(err,result){
+                if (err){
+                    console.error(err)
+                    return res.json({code:500,result:[],msg:"필터조회 실패 했습니다.",err: err});
+                }
+                User.populate(result,{path:"user",select:"phone provider image email name"},function(err,bikes){
+
+                    res.json({
+                        code:200,success:true,count:bikes.length,result:bikes,err:err
+                    });
                 });
             })
-        })
+    }
 
-    /*     if(bikes.slice(-1)[0]){
-     req.session.lastSeen = bikes.slice(-1)[0]._id;
-     res.json({
-     code:200,success:true,result:bikes,err:err
-     });
-     } else {
-     req.session.lastSeen = null;
-     res.json({
-     code:200,success:true,result:null,err:err
-     });
-     }*/
-/*
-    Bike.list(options, function (err, bikes) {
-        if (err){
-            console.error(err)
-            return res.json({msg:500,result:[],msg:"전체조회 실패 했습니다.",err: err});
-                    }
-        /!*console.log('조회한 데이터 ' ,bikes);*!/
-        if(bikes.slice(-1)[0]){
-            req.session.lastSeen = bikes.slice(-1)[0]._id;
-            res.json({
-                code:200,success:true,result:bikes,err:err
-            });
-        } else {
-            req.session.lastSeen = null;
-            res.json({
-                code:200,success:true,result:null,err:err
-            });
+
+    //본인 자전거는 조회 안되게.. 이후 처리.
+    /*if(req.isAuthenticated()){
+        user = new ObjectId(req.user.id);
+    }*/
+
+
+
+}
+
+exports.map = function(req,res,next){
+    var lat = req.params.lat ?req.params.lat : "37.565596";
+    var lon = req.params.lon ? req.params.lon : "126.978013";
+    var obj = Object.getOwnPropertyNames(req.query);
+    var json = {};
+
+    if(obj.length >0){
+        for(var i in obj ){
+            if(typeof req.query[obj[i]] === "string"){
+                json[obj[i]] =JSON.parse(req.query[obj[i]])
+            }
         }
-    });*/
-};
+    }
+    if(json.filter){
+        if(json.filter.start && json.filter.end){
+            var start = new Date(Date.parse(json.filter.start))
+            var end = new Date(Date.parse(json.filter.end))
+            Reserves.aggregate([
+                {
+                    $unwind:"$reserve"
+                },
+                {
+                    $match: {
+                        $or: [
+                            {$and:[{'reserve.rentStart':{$lt:start}},{'reserve.rentEnd':{$gt:start}},{'reserve.rentStart':{$lt:end}},{'reserve.rentEnd':{$lt:end}}]},
+                            {$and:[{'reserve.rentStart':{$gt:start}},{'reserve.rentEnd':{$gt:start}},{'reserve.rentStart':{$lt:end}},{'reserve.rentEnd':{$gt:end}}]},//없음
+                            {$and:[{'reserve.rentStart':{$lt:start}},{'reserve.rentEnd':{$gt:start}},{'reserve.rentStart':{$lt:end}},{'reserve.rentEnd':{$gt:end}}]},
+                            {$and:[{'reserve.rentStart':{$gt:start}},{'reserve.rentEnd':{$gt:start}},{'reserve.rentStart':{$lt:end}},{'reserve.rentEnd':{$lt:end}}]}
+                        ]
+                    }
 
+                },
+                {
+                    $group:{
+                        _id:"$bike"
+                    }
+                }
+            ]).exec(function(err,result){
+
+                if (err){
+                    console.error(err)
+                    return res.json({code:500,result:[],msg:"필터조회 실패 했습니다.",err: err.stack});
+                }
+                var and = [];
+                and.push({_id:{$nin: result.map(function(u){
+                    return new ObjectId(u._id);
+                })}});
+                if(json.filter.type){
+                    and.push({"type":json.filter.type})
+                }
+                if(json.filter.height){
+                    and.push({"height":json.filter.height});
+                }
+                if(!(json.filter.smartlock === 'undefined')){
+                    and.push({"smartlock":json.filter.smartlock});
+                }
+                if(and.length == 0){
+                    and.push({});
+                }
+                Bike.aggregate(
+                    [{
+                        $geoNear:{
+                            near:[parseFloat(lon), parseFloat(lat)],
+                            distanceField:"distance",
+                            /*includeLocs: "dist.location",*/
+                            spherical:true,
+                            distanceMultiplier:6378.139266/*,
+                             maxDistance:parseFloat("1010101010")/6378.139266*/
+                        }
+                    },{
+                        $match:{
+                            /*$and:[{_id:{$in: result.map(function(u){
+                             return new ObjectId(u.bike);
+                             })}},{"type":json.filter.type},{"height":json.filter.height}]*/
+                            $and: and
+
+                        }
+                    }])
+                    .exec(function(err,result){
+                        if (err){
+                            console.error(err)
+                            return res.json({msg:500,result:[],msg:"필터조회 실패 했습니다.",err: err});
+                        }
+                        User.populate(result,{path:"user",select:"phone provider image email name"},function(err,bikes){
+                            res.json({
+                                code:200,success:true,count:bikes.length,result:bikes,err:err
+                            });
+                        });
+                    })
+
+            })
+        }else{
+            var and = [];
+            if(json.filter.type){
+                and.push({"type":json.filter.type})
+            }
+            if(json.filter.height){
+                and.push({"height":json.filter.height});
+            }
+            if(!(json.filter.smartlock === 'undefined')){
+                and.push({"smartlock":json.filter.smartlock});
+            }
+            if(and.length == 0){
+                and.push({});
+            }
+            Bike.aggregate(
+                [{
+                    $geoNear:{
+                        near:[parseFloat(lon), parseFloat(lat)],
+                        distanceField:"distance",
+                        /*includeLocs: "dist.location",*/
+                        spherical:true,
+                        distanceMultiplier:6378.139266
+                        /*, maxDistance:parseFloat("1010101010")/6378.139266*/
+                    }
+                },{
+                    $match:{
+                        /*$and:[{_id:{$in: result.map(function(u){
+                         return new ObjectId(u.bike);
+                         })}},{"type":json.filter.type},{"height":json.filter.height}]*/
+                        $and: and
+
+                    }
+                }])
+                .exec(function(err,result){
+                    if (err){
+                        console.error(err)
+                        return res.json({msg:500,result:[],msg:"필터조회 실패 했습니다.",err: err});
+                    }
+                    User.populate(result,{path:"user",select:"phone provider image email name"},function(err,bikes){
+                        res.json({
+                            code:200,success:true,count:bikes.length,result:bikes,err:err
+                        });
+                    });
+                })
+        }
+    }else{
+        Bike.aggregate(
+            [{
+                $geoNear:{
+                    near:[parseFloat(lon), parseFloat(lat)],
+                    distanceField:"distance",
+                    /*includeLocs: "dist.location",*/
+                    spherical:true,
+                    distanceMultiplier:6378.139266/*,
+                     maxDistance:parseFloat("1010101010")/6378.139266*/
+                }
+            }])
+            .exec(function(err,result){
+                if (err){
+                    console.error(err)
+                    return res.json({msg:500,result:[],msg:"전체 조회 실패 했습니다.",err: err});
+                }
+                User.populate(result,{path:"user",select:"phone provider image email name"},function(err,bikes){
+
+                    res.json({
+                        code:200,success:true,count:bikes.length,result:bikes,err:err
+                    });
+                });
+            })
+
+    }
+}
 /**
  *
  * 보유자전거 조회
@@ -232,14 +423,13 @@ exports.index = function (req, res){
 exports.myList = function(req,res){
     var options = {};
     options.criteria = {user : req.user.id}
-    options.select = "title createdAt updatedAt active image";
-    options.limit = 100;
+    options.select = "title createdAt updatedAt active image price loc";
     Bike.list(options, function (err, bikes) {
         if(err) {
             console.error(err);
             res.json({code:500 , success:false,result:bikes,err:err});
         }
-        res.json({code:200 , success:true,result : bikes,err:err});
+        res.json({code:200 , success:true,count:bikes.length,result : bikes,err:err});
     });
 };
 
@@ -254,13 +444,13 @@ exports.detail = function(req,res){
 
     options.criteria = {_id : req.params.bikeId}
     options.populate = "user";
-    options.popselect = "_id email name";
+    options.popselect = "_id email name phone provider facebook";
     Bike.list(options, function (err, bikes) {
         if(err) {
             console.error(err);
             res.json({code:500 , success:false,result:bikes,err:err});
         }
-        res.json({code:200 , success:true,result : bikes,err:err});
+        res.json({code:200 , success:true,count:bikes.length,result : bikes,err:err});
     });
 }
 /**
@@ -285,7 +475,6 @@ exports.delete = function(req,res){
             });
         }else{
             Bike.findOneAndRemove(options.criteria,function(err,data){
-                console.log('delete data :', data);
                 if(err){
                     console.error(err);
                     return res.json({code:'500',success:false,result:[],msg:"보유자전거 삭제 실패 했습니다.",err:err});
@@ -302,18 +491,24 @@ exports.delete = function(req,res){
 /**
  *
  * 보유자전거 수정
- *
+ * var updates = { $set: {title:"수정된 자전거",loc :{ type: 'Point', coordinates: [parseFloat(121.958781), parseFloat(34.468383)] },updatedAt :new Date()} };
  * */
 exports.edit = function(req,res,next){
     var options = {};
-    /*var updates = { $set: {title:"수정된 자전거",loc :{ type: 'Point', coordinates: [parseFloat(121.958781), parseFloat(34.468383)] },updatedAt :new Date()} };*/
-    var data = req.body.bike ? req.body.bike : undefined;
+
+    var bike = req.body.bike ? req.body.bike : undefined;
     var bikeId = req.params.bikeId ? req.params.bikeId : undefined;
 
-    if(typeof data == "string"){
-        data = JSON.parse(data);
+    if(typeof bike == "string"){
+        bike = JSON.parse(bike);
     }
-    var updates = { $set: data ,updatedAt :new Date()} ;
+    var coordinates = bike.loc.coordinates ? bike.loc.coordinates : undefined;
+    if(coordinates){
+        if(coordinates.length>0){
+            bike.loc = { type: 'Point', coordinates: [parseFloat(coordinates[0]), parseFloat(coordinates[1])] };
+        }
+    }
+    var updates = { $set: bike ,updatedAt :new Date()} ;
     options.criteria = {_id : bikeId};
     Bike.findOneAndUpdate(options.criteria,updates,{ runValidators: true },
         function(err,data){
@@ -344,7 +539,6 @@ exports.active = function(req,res,next){
             result =  "보유자전거 비활성화되 었습니다."
         }
         data.update(updates).exec(function(err,data){
-            console.log('result : ' , data);
             if (err){
                 console.error('err ',err);
                 return res.json({code:'500',success:false,result:[],msg:"보유자전거 활성화 실패 했습니다.",err:err});
@@ -374,30 +568,4 @@ exports.addLock = function(req,res,next){
     })
 }
 
-exports.test = function(req,res){
-    var Imager = require('imager');
-    var imagerConfig = require("../../config/imager");
-    var imager = new Imager(imagerConfig, 'S3');
-    var images = req.files.image
-        ? [req.files.image]
-        : undefined; //  이미지 정보
-    console.log("images " , images);
-    var rst  = {}
-    console.log('req.files ', req.files);
-    console.log('req.body ' , req.body);
-
-    images.forEach(function(data){
-        imager.upload(data, function (err, cdnUri, files) {
-            console.log('cdnUril ',cdnUri);
-            console.log('files ', files);
-            if (err) return cb(err);
-            console.log(files.length)
-            if (files.length) {
-                rst.image = { cdnUri : cdnUri, files : files };
-            }
-            console.log(' self ' , rst)
-        }, 'article');
-    })
-    res.end();
-}
 
